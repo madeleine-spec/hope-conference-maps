@@ -2,18 +2,16 @@
 <html lang="en">
 
 <head>
-
   <meta charset="UTF-8">
 
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes"
+    content="width=device-width, initial-scale=1.0, user-scalable=no"
   >
 
   <title>HOPE Conference Map</title>
 
   <style>
-
     * {
       box-sizing: border-box;
     }
@@ -24,23 +22,25 @@
       padding: 0;
       background: #ffffff;
       font-family: Helvetica, Arial, sans-serif;
+      color: #111111;
     }
 
     .map-page {
       width: 100%;
-      padding: 15px;
+      padding: 14px;
     }
+
+    /* HEADER */
 
     .map-header {
       text-align: center;
-      margin-bottom: 15px;
+      margin-bottom: 14px;
     }
 
     .map-header h1 {
       margin: 0 0 4px;
-      font-size: 24px;
+      font-size: 23px;
       font-weight: 700;
-      color: #111111;
     }
 
     .map-header p {
@@ -49,28 +49,128 @@
       color: #666666;
     }
 
-    .map-container {
-      width: 100%;
-      overflow: auto;
-      -webkit-overflow-scrolling: touch;
+    /* CONTROLS */
+
+    .map-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      margin-bottom: 12px;
     }
 
-    .map-container img {
-      display: block;
-      width: 100%;
-      height: auto;
-      margin: 0 auto;
+    .map-controls button {
+      appearance: none;
+      border: 1px solid #d5d5d5;
+      background: #ffffff;
+      color: #111111;
+
+      min-width: 42px;
+      height: 40px;
+
+      padding: 0 13px;
+
+      border-radius: 8px;
+
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+
+      cursor: pointer;
     }
 
-    .zoom-note {
-      margin-top: 10px;
+    .map-controls button:active {
+      background: #f1f1f1;
+    }
+
+    .map-controls .reset-button {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .zoom-level {
+      min-width: 54px;
       text-align: center;
       font-size: 13px;
+      font-weight: 600;
+      color: #555555;
+    }
+
+    /* MAP VIEWER */
+
+    .map-viewport {
+      width: 100%;
+      height: 620px;
+
+      overflow: hidden;
+
+      border: 1px solid #e3e3e3;
+      border-radius: 10px;
+
+      background: #f7f7f7;
+
+      position: relative;
+
+      cursor: grab;
+
+      touch-action: none;
+    }
+
+    .map-viewport.dragging {
+      cursor: grabbing;
+    }
+
+    .map-image {
+      position: absolute;
+
+      top: 0;
+      left: 0;
+
+      width: 100%;
+      height: auto;
+
+      transform-origin: top left;
+
+      user-select: none;
+      -webkit-user-select: none;
+
+      pointer-events: none;
+    }
+
+    /* INSTRUCTIONS */
+
+    .map-note {
+      text-align: center;
+      margin: 10px 0 0;
+
+      font-size: 13px;
+      line-height: 1.4;
+
       color: #777777;
     }
 
-  </style>
+    /* MOBILE */
 
+    @media (max-width: 600px) {
+
+      .map-page {
+        padding: 10px;
+      }
+
+      .map-header h1 {
+        font-size: 21px;
+      }
+
+      .map-viewport {
+        height: 600px;
+      }
+
+      .map-controls button {
+        height: 42px;
+      }
+    }
+
+  </style>
 </head>
 
 
@@ -87,21 +187,239 @@
     </div>
 
 
-    <div class="map-container">
+    <!-- ZOOM CONTROLS -->
+
+    <div class="map-controls">
+
+      <button
+        type="button"
+        id="zoomOut"
+        aria-label="Zoom out">
+        −
+      </button>
+
+      <span
+        class="zoom-level"
+        id="zoomLevel">
+        100%
+      </span>
+
+      <button
+        type="button"
+        id="zoomIn"
+        aria-label="Zoom in">
+        +
+      </button>
+
+      <button
+        type="button"
+        class="reset-button"
+        id="resetMap">
+        Reset
+      </button>
+
+    </div>
+
+
+    <!-- MAP -->
+
+    <div
+      class="map-viewport"
+      id="mapViewport">
 
       <img
         src="conference-map.png"
         alt="HOPE Conference 2026 Conference Map"
+        class="map-image"
+        id="conferenceMap"
+        draggable="false"
       >
 
     </div>
 
 
-    <div class="zoom-note">
-      Pinch to zoom for a closer look.
-    </div>
+    <p class="map-note">
+      Use + and − to zoom. Drag the map to move around.
+    </p>
 
   </main>
+
+
+  <script>
+
+    const viewport =
+      document.getElementById("mapViewport");
+
+    const map =
+      document.getElementById("conferenceMap");
+
+    const zoomIn =
+      document.getElementById("zoomIn");
+
+    const zoomOut =
+      document.getElementById("zoomOut");
+
+    const resetMap =
+      document.getElementById("resetMap");
+
+    const zoomLevel =
+      document.getElementById("zoomLevel");
+
+
+    let scale = 1;
+
+    let positionX = 0;
+    let positionY = 0;
+
+    let dragging = false;
+
+    let startX = 0;
+    let startY = 0;
+
+    const minimumScale = 1;
+    const maximumScale = 4;
+    const zoomStep = 0.5;
+
+
+    /* UPDATE MAP */
+
+    function updateMap() {
+
+      map.style.transform =
+        `translate(${positionX}px, ${positionY}px) scale(${scale})`;
+
+      zoomLevel.textContent =
+        Math.round(scale * 100) + "%";
+
+    }
+
+
+    /* ZOOM IN */
+
+    zoomIn.addEventListener("click", function() {
+
+      if (scale < maximumScale) {
+
+        scale += zoomStep;
+
+        updateMap();
+
+      }
+
+    });
+
+
+    /* ZOOM OUT */
+
+    zoomOut.addEventListener("click", function() {
+
+      if (scale > minimumScale) {
+
+        scale -= zoomStep;
+
+        if (scale === 1) {
+          positionX = 0;
+          positionY = 0;
+        }
+
+        updateMap();
+
+      }
+
+    });
+
+
+    /* RESET */
+
+    resetMap.addEventListener("click", function() {
+
+      scale = 1;
+
+      positionX = 0;
+      positionY = 0;
+
+      updateMap();
+
+    });
+
+
+    /* START DRAG */
+
+    viewport.addEventListener(
+      "pointerdown",
+      function(event) {
+
+        if (scale <= 1) {
+          return;
+        }
+
+        dragging = true;
+
+        startX =
+          event.clientX - positionX;
+
+        startY =
+          event.clientY - positionY;
+
+        viewport.classList.add("dragging");
+
+        viewport.setPointerCapture(
+          event.pointerId
+        );
+
+      }
+    );
+
+
+    /* DRAG */
+
+    viewport.addEventListener(
+      "pointermove",
+      function(event) {
+
+        if (!dragging) {
+          return;
+        }
+
+        positionX =
+          event.clientX - startX;
+
+        positionY =
+          event.clientY - startY;
+
+        updateMap();
+
+      }
+    );
+
+
+    /* STOP DRAG */
+
+    function stopDragging(event) {
+
+      dragging = false;
+
+      viewport.classList.remove("dragging");
+
+    }
+
+
+    viewport.addEventListener(
+      "pointerup",
+      stopDragging
+    );
+
+    viewport.addEventListener(
+      "pointercancel",
+      stopDragging
+    );
+
+
+    /* INITIALIZE */
+
+    updateMap();
+
+  </script>
 
 </body>
 
